@@ -1,0 +1,9 @@
+test/
+.backups/
+**/.backups/
+.screenshots/
+**/.screenshots/
+.git/
+.gitignore
+.gitattributes
+*.log

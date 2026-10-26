@@ -1,0 +1,62 @@
+{
+  "name": "opencode-auto-backup",
+  "version": "1.0.0",
+  "description": "Zero-dependency automatic pre-edit file backup plugin for OpenCode with smart project-root resolution, multi-file patch support, retention pruning, and a zero-token interactive /backups restore TUI popup.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./server": "./index.js",
+    "./tui": "./tui.ts"
+  },
+  "bin": {
+    "opencode-auto-backup": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "tui.ts",
+    "assets/screenshot.png",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --no-warnings --test test/backup.test.js"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "backup",
+    "auto-backup",
+    "restore",
+    "undo",
+    "snapshots",
+    "tui"
+  ],
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=2.0.0",
+    "@opentui/core": "*",
+    "@opentui/solid": "*",
+    "solid-js": "*"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    },
+    "@opentui/core": {
+      "optional": true
+    },
+    "@opentui/solid": {
+      "optional": true
+    },
+    "solid-js": {
+      "optional": true
+    }
+  },
+  "author": "nandoblanco",
+  "license": "MIT",
+  "repository": "github:nandoblanco/opencode-auto-backup"
+}
