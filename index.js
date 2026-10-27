@@ -166,7 +166,7 @@ async function installPlugin(options) {
   const configDir = resolveConfigDir(opts.configDir);
   fs.mkdirSync(configDir, { recursive: true });
 
-  const pkgName = "opencode-auto-backup";
+  const pkgName = "opencode-local-backup";
   const entryStr = opts.retentionDays
     ? '["' + pkgName + '", { "retentionDays": ' + Number(opts.retentionDays) + " }]"
     : '"' + pkgName + '"';
@@ -976,7 +976,7 @@ function openBackupDiff(backupFilePath, currentFilePath) {
 
 function createPluginDefinition() {
   return {
-    id: "opencode-auto-backup",
+    id: "opencode-local-backup",
     async setup(ctx) {
       const opts = (ctx && ctx.options) || {};
       const customRoot = opts.backupRoot || process.env.OPENCODE_BACKUP_ROOT || "";
@@ -1176,7 +1176,7 @@ if (isDirectRun) {
   if (cmd === "install" || cmd === "init" || cmd === "setup") {
     installPlugin().then(function (res) {
       const settingsInfo = writeBackupSettings({});
-      console.log("opencode-auto-backup installed:");
+      console.log("opencode-local-backup installed:");
       console.log("  Server config:   " + res.serverConfigFile + " (" + res.serverStatus + ")");
       console.log("  TUI config:      " + res.cliConfigFile + " (" + res.cliStatus + ")");
       console.log("  Settings file:   " + settingsInfo.filePath + " (retentionDays=" + settingsInfo.settings.retentionDays + ")");

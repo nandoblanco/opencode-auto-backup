@@ -1324,7 +1324,7 @@ async function openFallbackSelectDialog(
 }
 
 export default {
-  id: "opencode-auto-backup",
+  id: "opencode-local-backup",
   async setup(context: TuiPluginContext) {
     if (!context?.ui) {
       return;

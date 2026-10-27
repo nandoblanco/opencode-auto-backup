@@ -1,8 +1,8 @@
-# opencode-auto-backup
+# opencode-local-backup
 
-Local-first, zero-token automatic pre-edit file backup plugin for OpenCode with smart project-root resolution, multi-file patch support, retention pruning, and an interactive `/backups` diff and restore TUI popup.
+**Local-first, automatic pre-edit file backup plugin for OpenCode**: snapshots files automatically in the engine pipeline before any edit tool runs, with zero token usage, smart project-root resolution, retention auto-pruning, and an interactive `/backups` diff and restore TUI popup.
 
-![opencode-auto-backup TUI preview](./assets/screenshot.png)
+![opencode-local-backup TUI preview](./assets/screenshot.png)
 
 ## Background
 
@@ -12,7 +12,7 @@ This plugin started as a PowerShell script (`backup.ps1`) paired with a rule in 
 2. **Prompt rules can be skipped after context compaction**: If the model forgot the instruction on a long turn, the file was edited without a snapshot.
 3. **Subfolder pollution**: Passing a file's parent directory created `.backups/` folders inside nested subdirectories (`src/components/.backups/`, `api/.backups/`) instead of keeping all snapshots at the project root.
 
-`opencode-auto-backup` moves pre-edit backups into OpenCode's tool execution pipeline:
+`opencode-local-backup` moves pre-edit backups into OpenCode's tool execution pipeline:
 
 1. **Engine-level `execute.before` hook**: Intercepts `edit`, `write`, `patch`, `apply_patch`, and `multiedit` calls in pure Node.js before the tool touches disk, with zero prompt rules or LLM tokens.
 2. **Smart project-root resolution**: Walks upward from the target file to the nearest project root marker so every snapshot lands in `<project-root>/.backups/`.
@@ -40,32 +40,32 @@ This plugin started as a PowerShell script (`backup.ps1`) paired with a rule in 
 Run the built-in installer to automatically register the server and TUI plugins in `~/.config/opencode/opencode.jsonc` and `~/.config/opencode/cli.json`:
 
 ```sh
-npx github:nandoblanco/opencode-auto-backup install
+npx github:nandoblanco/opencode-local-backup install
 ```
 
 Or set a custom workspace root directory for `.backups/` discovery during setup:
 
 ```sh
-npx github:nandoblanco/opencode-auto-backup root "C:\MAMPFiles"
+npx github:nandoblanco/opencode-local-backup root "C:\MAMPFiles"
 ```
 
 You can also install with OpenCode's native plugin CLI (because `package.json` exports both `.` and `./tui`, OpenCode loads both the server plugin and `/backups` TUI popup automatically):
 
 ```sh
-opencode plugin add opencode-auto-backup
+opencode plugin add opencode-local-backup
 # or directly from GitHub:
-opencode plugin add github:nandoblanco/opencode-auto-backup
+opencode plugin add github:nandoblanco/opencode-local-backup
 ```
 
 ### Option 2: Manual Configuration
 
-Add `opencode-auto-backup` to `~/.config/opencode/opencode.jsonc` and `~/.config/opencode/cli.json`:
+Add `opencode-local-backup` to `~/.config/opencode/opencode.jsonc` and `~/.config/opencode/cli.json`:
 
 ```jsonc
 {
 	"plugins": [
 		{
-			"package": "opencode-auto-backup",
+			"package": "opencode-local-backup",
 			"options": {
 				"retentionDays": 30,
 				"debounceMs": 0,
@@ -79,11 +79,11 @@ Add `opencode-auto-backup` to `~/.config/opencode/opencode.jsonc` and `~/.config
 
 ### From a Local Directory
 
-Clone this repository and run `node ./index.js install` (or reference `"file:///path/to/opencode-auto-backup"` in `opencode.jsonc` and `cli.json`):
+Clone this repository and run `node ./index.js install` (or reference `"file:///path/to/opencode-local-backup"` in `opencode.jsonc` and `cli.json`):
 
 ```json
 {
-	"plugins": ["file:///path/to/opencode-auto-backup"]
+	"plugins": ["file:///path/to/opencode-local-backup"]
 }
 ```
 
@@ -249,7 +249,7 @@ Normal backup, diff preview, and restore operations use zero LLM tokens:
 | :--- | :--- | :--- |
 | Automatic pre-edit backups (`execute.before` hook) | **0 tokens** | Runs in plain Node.js inside OpenCode before `edit`, `write`, `patch`, `apply_patch`, or `multiedit` touches disk; injects no system prompt rules and appends nothing to chat |
 | Interactive `/backups` TUI modal (`Ctrl+Alt+B`) | **0 tokens** | Filtering snapshots, computing hunk diffs (`computeUnifiedDiff`), restoring files (`1`), opening files/diffs (`2`/`3`), cycling retention (`Ctrl+R`), and pruning (`Ctrl+D`) run directly on disk without an LLM request |
-| Standalone CLI (`npx opencode-auto-backup ...`) | **0 tokens** | Runs directly in Node.js outside the model turn |
+| Standalone CLI (`npx opencode-local-backup ...`) | **0 tokens** | Runs directly in Node.js outside the model turn |
 | Agent tools (`backup_list`, `backup_restore`) | **~120 schema tokens** (+ turn tokens only if called) | Tool definitions are registered with the server so you can ask the agent to list or restore a snapshot in chat; using `/backups` instead avoids calling these tools |
 
 ## Directory Structure
@@ -292,26 +292,26 @@ Each snapshot's `.backup-meta.json` stores the file manifest used by `/backups` 
 
 ```sh
 # Install into OpenCode server + TUI config
-npx opencode-auto-backup install
+npx opencode-local-backup install
 
 # List recent backups in the current project
-npx opencode-auto-backup list
+npx opencode-local-backup list
 
 # Create a manual snapshot of specific files
-npx opencode-auto-backup backup my-change-slug src/index.js src/config.js
+npx opencode-local-backup backup my-change-slug src/index.js src/config.js
 
 # View or set auto-prune retention days (0 = never auto-prune, default = 30)
-npx opencode-auto-backup retention
-npx opencode-auto-backup retention 5
-npx opencode-auto-backup retention 0
+npx opencode-local-backup retention
+npx opencode-local-backup retention 5
+npx opencode-local-backup retention 0
 
 # View, set, or clear the starting root directory for scanning .backups/ folders
-npx opencode-auto-backup root
-npx opencode-auto-backup root "C:\MAMPFiles"
-npx opencode-auto-backup root --clear
+npx opencode-local-backup root
+npx opencode-local-backup root "C:\MAMPFiles"
+npx opencode-local-backup root --clear
 
 # Prune snapshots older than 30 days
-npx opencode-auto-backup prune . 30
+npx opencode-local-backup prune . 30
 ```
 
 ## Configuration Options
@@ -331,7 +331,7 @@ Settings are stored in `~/.config/opencode/auto-backup.json` (created automatica
 | :--- | :--- | :--- | :--- |
 | `retentionDays` | `OPENCODE_BACKUP_RETENTION_DAYS` | `30` | Days to keep backup snapshots before auto-pruning (`0` = never auto-prune) |
 | `debounceMs` | `OPENCODE_BACKUP_DEBOUNCE_MS` | `0` | Minimum milliseconds between automatic snapshots of the same file (`0` = every single edit) |
-| `rootDir` | `OPENCODE_BACKUP_ROOT_DIR` | `""` *(auto-detect)* | Starting root directory for discovering all `.backups/` folders across subprojects (`npx opencode-auto-backup root <path>`) |
+| `rootDir` | `OPENCODE_BACKUP_ROOT_DIR` | `""` *(auto-detect)* | Starting root directory for discovering all `.backups/` folders across subprojects (`npx opencode-local-backup root <path>`) |
 | `backupRoot` | `OPENCODE_BACKUP_ROOT` | *(auto)* | Optional fixed destination directory where new `.backups/` snapshots are written instead of per-project root detection |
 | `dialogWidth` | `OPENCODE_BACKUP_DIALOG_WIDTH` | `"80%"` | Width of the centered `/backups` TUI modal (`"80%"` or column count like `120`; also respects `OPENCODE_DIALOG_WIDTH`) |
 | *(editor)* | `OPENCODE_BACKUP_EDITOR` | `$VISUAL` / `$EDITOR` / OS default | Command used when choosing **[2] Open backup file** in the `/backups` action popup |

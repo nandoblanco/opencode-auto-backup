@@ -21,7 +21,7 @@ import server, {
 } from "../index.js";
 
 function makeTempProject() {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "opencode-auto-backup-test-"));
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "opencode-local-backup-test-"));
   fs.writeFileSync(path.join(tmpDir, "package.json"), '{"name":"demo-app"}', "utf8");
   fs.mkdirSync(path.join(tmpDir, "src", "nested"), { recursive: true });
   return tmpDir;
@@ -181,7 +181,7 @@ test("pruneOldBackups deletes snapshot directories older than retentionDays and 
 });
 
 test("readBackupSettings and writeBackupSettings persist retentionDays (including 0 for never)", function () {
-  const tmpConfig = fs.mkdtempSync(path.join(os.tmpdir(), "opencode-auto-backup-settings-"));
+  const tmpConfig = fs.mkdtempSync(path.join(os.tmpdir(), "opencode-local-backup-settings-"));
   try {
     const def = readBackupSettings(tmpConfig);
     assert.equal(def.retentionDays, 30);
@@ -232,7 +232,7 @@ test("OpenCode server plugin hooks execute.before and backs up edited files auto
 });
 
 test("installPlugin writes plugin entry into opencode.jsonc and cli.json", async function () {
-  const tmpConfig = fs.mkdtempSync(path.join(os.tmpdir(), "opencode-auto-backup-cfg-"));
+  const tmpConfig = fs.mkdtempSync(path.join(os.tmpdir(), "opencode-local-backup-cfg-"));
   try {
     const res1 = await installPlugin({ configDir: tmpConfig });
     assert.equal(res1.serverStatus, "created");
