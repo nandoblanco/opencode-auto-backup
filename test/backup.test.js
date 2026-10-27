@@ -204,6 +204,7 @@ test("OpenCode server plugin hooks execute.before and backs up edited files auto
     fs.writeFileSync(targetFile, "const v = 1;\n", "utf8");
 
     let hookHandler = null;
+    const registeredTools = [];
     const mockCtx = {
       options: { debounceMs: 0 },
       location: { directory: root },
@@ -211,12 +212,21 @@ test("OpenCode server plugin hooks execute.before and backs up edited files auto
         hook: async function (eventName, fn) {
           if (eventName === "execute.before") hookHandler = fn;
           return { dispose: async function () {} };
+        },
+        transform: async function (fn) {
+          fn({
+            add: function (toolDef) {
+              registeredTools.push(toolDef.name);
+            }
+          });
+          return { dispose: async function () {} };
         }
       }
     };
 
     await server.setup(mockCtx);
     assert.equal(typeof hookHandler, "function");
+    assert.deepEqual(registeredTools, ["backup_list", "backup_restore"]);
 
     hookHandler({
       tool: "edit",

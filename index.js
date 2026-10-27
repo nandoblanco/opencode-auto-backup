@@ -1235,8 +1235,17 @@ function createPluginDefinition() {
         if (hookReg) registrations.push(hookReg);
       }
 
-      if (ctx && ctx.tool && typeof ctx.tool.register === "function") {
-        const toolReg = await ctx.tool.register(function (editor) {
+      const toolTransform =
+        ctx && ctx.tool
+          ? typeof ctx.tool.transform === "function"
+            ? ctx.tool.transform.bind(ctx.tool)
+            : typeof ctx.tool.register === "function"
+              ? ctx.tool.register.bind(ctx.tool)
+              : null
+          : null;
+
+      if (toolTransform) {
+        const toolReg = await toolTransform(function (editor) {
           editor.add({
             name: "backup_list",
             description: "List recent automatic and manual file backup snapshots in .backups/ for the current project.",
