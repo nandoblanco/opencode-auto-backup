@@ -40,13 +40,13 @@ This plugin started as a PowerShell script (`backup.ps1`) paired with a rule in 
 Run the built-in installer to automatically register the server and TUI plugins in `~/.config/opencode/opencode.jsonc` and `~/.config/opencode/cli.json`:
 
 ```sh
-npx github:nandoblanco/opencode-local-backup install
+npx opencode-local-backup install
 ```
 
 Or set a custom workspace root directory for `.backups/` discovery during setup:
 
 ```sh
-npx github:nandoblanco/opencode-local-backup root "C:\MAMPFiles"
+npx opencode-local-backup root "C:\MAMPFiles"
 ```
 
 You can also install with OpenCode's native plugin CLI (because `package.json` exports both `.` and `./tui`, OpenCode loads both the server plugin and `/backups` TUI popup automatically):
