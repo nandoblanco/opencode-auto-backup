@@ -1,7 +1,7 @@
 {
   "name": "opencode-auto-backup",
   "version": "1.0.0",
-  "description": "Zero-dependency automatic pre-edit file backup plugin for OpenCode with smart project-root resolution, multi-file patch support, retention pruning, and a zero-token interactive /backups restore TUI popup.",
+  "description": "Local-first, zero-token automatic pre-edit file backup plugin for OpenCode with smart project-root resolution, multi-file patch support, retention pruning, and an interactive /backups diff and restore TUI popup.",
   "type": "module",
   "main": "./index.js",
   "exports": {
@@ -29,6 +29,8 @@
   "keywords": [
     "opencode",
     "opencode-plugin",
+    "local-first",
+    "zero-token",
     "backup",
     "auto-backup",
     "restore",

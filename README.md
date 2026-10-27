@@ -1,6 +1,6 @@
 # opencode-auto-backup
 
-Zero-dependency automatic pre-edit file backup plugin for OpenCode with smart project-root resolution, multi-file patch support, retention pruning, and a zero-token interactive `/backups` restore TUI popup.
+Local-first, zero-token automatic pre-edit file backup plugin for OpenCode with smart project-root resolution, multi-file patch support, retention pruning, and an interactive `/backups` diff and restore TUI popup.
 
 ![opencode-auto-backup TUI preview](./assets/screenshot.png)
 
@@ -16,71 +16,128 @@ This plugin started as a PowerShell script (`backup.ps1`) paired with a rule in 
 
 1. **Engine-level `execute.before` hook**: Intercepts `edit`, `write`, `patch`, `apply_patch`, and `multiedit` calls in pure Node.js before the tool touches disk, with zero prompt rules or LLM tokens.
 2. **Smart project-root resolution**: Walks upward from the target file to the nearest project root marker so every snapshot lands in `<project-root>/.backups/`.
-3. **Zero-token `/backups` TUI modal**: Filter snapshots, inspect a live line diff against the current file on disk, adjust auto-prune retention, and restore files with `Enter`.
+3. **Zero-token `/backups` TUI modal**: Filter snapshots, inspect a live hunk diff against the current file on disk, open a full side-by-side diff in VS Code, adjust auto-prune retention, and restore files with `Enter`.
 
 ## Features
 
-| Feature                                   | Details                                                                                                                                                                                                                                                                                                                      |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Engine-level `execute.before` hook        | Automatically snapshots existing files before `edit`, `write`, `patch`, `apply_patch`, or `multiedit` tool calls run                                                                                                                                                                                                         |
-| Zero prompt or token overhead             | Runs in the background without requiring `AGENTS.md` backup rules or model shell tool calls                                                                                                                                                                                                                                  |
-| Smart project-root resolution             | Walks upward to find `.git`, `package.json`, `composer.json`, `Cargo.toml`, `pyproject.toml`, `go.mod`, `.opencode`, `AGENTS.md`, `opencode.jsonc`, or `opencode.json` so all backups stay in `<project-root>/.backups/` instead of polluting nested subfolders                                                         |
-| Preserved relative paths                  | Stores `<project-root>/.backups/<YYYY-MM-DD_HH-mm-ss>_<slug>/<relative-path>` plus `.backup-meta.json`                                                                                                                                                                                                                       |
-| Multi-file patch support                  | Extracts every `*** Update File:`, `*** Delete File:`, and `*** Move File:` entry in a patch                                                                                                                                                                                                                                 |
-| Interactive `/backups` TUI modal          | Wide (`80%` default, configurable via `dialogWidth`) split-pane browser with colored filter pills (`^t` tool, `^g` date, `^r` retention, `^d` prune), parent backup path under each item, hunk-filtered unified diff preview with line numbers, and a 3-option `Enter` action popup (**[1] Restore file**, **[2] Open backup file**, or **[3] Open diff in editor**) |
-| Instant hunk diff + external editor diff  | Right-hand pane immediately renders changed hunks (`±3` context lines + line numbers), while action `[3]` (`D`) launches `code --diff <backup> <current>` (or `$OPENCODE_BACKUP_DIFF_CMD`) for a full side-by-side comparison                                                                                                |
-| Unlimited workspace discovery (`rootDir`) | Scans all `.backups/` folders across your workspace with no depth cap (`Infinity`) and no snapshot count cap, configurable via `rootDir` in `~/.config/opencode/auto-backup.json` or automatic workspace-root detection                                                                                                      |
-| Pre-restore safety snapshot               | Restoring a file automatically backs up the current file on disk first (`pre-restore`)                                                                                                                                                                                                                                       |
-| Configurable auto-prune (`retentionDays`) | Defaults to `30` days; set to `5`, `7`, `14`, or `0` (never auto-prune) via `~/.config/opencode/auto-backup.json`, `/backups` (`Ctrl+R`), CLI, or plugin options                                                                                                                                                             |
+| Feature | Details |
+| :--- | :--- |
+| Engine-level `execute.before` hook | Automatically snapshots existing files before `edit`, `write`, `patch`, `apply_patch`, or `multiedit` tool calls run |
+| Local-first, zero-token execution | Pure local Node.js filesystem snapshots and TUI diff/restore with zero LLM token usage, zero prompt rules, and zero cloud dependencies |
+| Smart project-root resolution | Walks upward to find `.git`, `package.json`, `composer.json`, `Cargo.toml`, `pyproject.toml`, `go.mod`, `.opencode`, `AGENTS.md`, `opencode.jsonc`, or `opencode.json` so all backups stay in `<project-root>/.backups/` instead of polluting nested subfolders |
+| Preserved relative paths | Stores `<project-root>/.backups/<YYYY-MM-DD_HH-mm-ss>_<slug>/<relative-path>` plus `.backup-meta.json` |
+| Multi-file patch support | Extracts every `*** Update File:`, `*** Delete File:`, and `*** Move File:` entry in a patch |
+| Interactive `/backups` TUI modal | Wide (`80%` default, configurable via `dialogWidth`) split-pane browser with colored filter pills (`^t` tool, `^g` date, `^r` retention, `^d` prune), parent backup path under each item, hunk-filtered unified diff preview with line numbers, and a 3-option `Enter` action popup (**[1] Restore file**, **[2] Open backup file**, or **[3] Open diff in editor**) |
+| Instant hunk diff + external editor diff | Right-hand pane immediately renders changed hunks (`±3` context lines + line numbers), while action `[3]` (`D`) launches `code --diff <backup> <current>` (or `$OPENCODE_BACKUP_DIFF_CMD`) for a full side-by-side comparison |
+| Unlimited workspace discovery (`rootDir`) | Scans all `.backups/` folders across your workspace with no depth cap (`Infinity`) and no snapshot count cap, configurable via `rootDir` in `~/.config/opencode/auto-backup.json` or automatic workspace-root detection |
+| Pre-restore safety snapshot | Restoring a file automatically backs up the current file on disk first (`pre-restore`) |
+| Configurable auto-prune (`retentionDays`) | Defaults to `30` days; set to `5`, `7`, `14`, or `0` (never auto-prune) via `~/.config/opencode/auto-backup.json`, `/backups` (`Ctrl+R`), CLI, or plugin options |
 
 ## Installation
 
-### One-Command Installer
+### Option 1: One-Command Install (Recommended)
 
-```bash
+Run the built-in installer to automatically register the server and TUI plugins in `~/.config/opencode/opencode.jsonc` and `~/.config/opencode/cli.json`:
+
+```sh
 npx github:nandoblanco/opencode-auto-backup install
 ```
 
-This adds `"opencode-auto-backup"` to both `~/.config/opencode/opencode.jsonc` (server hook + tools) and `~/.config/opencode/cli.json` (`/backups` TUI modal).
+Or set a custom workspace root directory for `.backups/` discovery during setup:
 
-### Manual Configuration
+```sh
+npx github:nandoblanco/opencode-auto-backup root "C:\MAMPFiles"
+```
 
-Add `"opencode-auto-backup"` to `~/.config/opencode/opencode.jsonc` and `~/.config/opencode/cli.json`:
+You can also install with OpenCode's native plugin CLI (because `package.json` exports both `.` and `./tui`, OpenCode loads both the server plugin and `/backups` TUI popup automatically):
+
+```sh
+opencode plugin add opencode-auto-backup
+# or directly from GitHub:
+opencode plugin add github:nandoblanco/opencode-auto-backup
+```
+
+### Option 2: Manual Configuration
+
+Add `opencode-auto-backup` to `~/.config/opencode/opencode.jsonc` and `~/.config/opencode/cli.json`:
 
 ```jsonc
 {
 	"plugins": [
-		[
-			"opencode-auto-backup",
-			{
+		{
+			"package": "opencode-auto-backup",
+			"options": {
 				"retentionDays": 30,
 				"debounceMs": 0,
-			},
-		],
-	],
+				"rootDir": "C:\\MAMPFiles",
+				"dialogWidth": "80%"
+			}
+		}
+	]
 }
 ```
 
-## TUI Usage (`/backups`)
+### From a Local Directory
 
-Run `/backups` (aliases: `/backup`, `/restore`, `/snapshots`, or bind `auto.backup.browse` to `ctrl+alt+b` in `cli.json`) inside OpenCode:
+Clone this repository and run `node ./index.js install` (or reference `"file:///path/to/opencode-auto-backup"` in `opencode.jsonc` and `cli.json`):
 
-| Key                                  | Action                                                                                                                                   |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Type characters                      | Filter snapshots by file path, parent `.backups` folder, or snapshot slug                                                                |
-| `Tab` / `Shift+Tab`                  | Cycle focus between Search input, Snapshots list, and Diff Preview pane                                                                  |
-| `Up` / `Down` or `Ctrl+K` / `Ctrl+J` | Select snapshot (or scroll diff by 2 lines when Preview pane is focused; `j`/`k` also work in List and Preview panes)                    |
-| `PageUp` / `PageDown`                | Jump 6 snapshots up/down (or scroll diff by 8 lines in Preview pane)                                                                     |
-| `Ctrl+T`                             | Cycle tool filter pill (`all` -> `edit` -> `write` -> `patch` -> `pre-restore`)                                                          |
-| `Ctrl+G`                             | Cycle date filter pill (`all` -> `24h` -> `7d` -> `30d`)                                                                                 |
-| `Ctrl+R`                             | Cycle auto-prune retention pill (`30d` -> `14d` -> `7d` -> `5d` -> `0d (Never)`)                                                         |
-| `Ctrl+D`                             | Prune snapshots older than current `retentionDays`                                                                                       |
-| `Ctrl+U`                             | Clear the active search query and reset tool/date filters                                                                                |
-| `Enter`                              | Open the 3-option Action Popup for the selected snapshot: **[1] Restore file**, **[2] Open backup file**, or **[3] Open diff in editor** |
-| `1` / `R` _(in action popup)_        | Restore selected snapshot to disk (creates a `pre-restore` safety backup first)                                                          |
-| `2` / `O` _(in action popup)_        | Open the snapshot file in your default OS editor (or `$OPENCODE_BACKUP_EDITOR` / `$VISUAL` / `$EDITOR`)                                  |
-| `3` / `D` _(in action popup)_        | Open a side-by-side diff (`backup` vs `current` on disk) in VS Code (`code --diff`) or `$OPENCODE_BACKUP_DIFF_CMD`                       |
-| `Esc`                                | Close action popup or modal                                                                                                              |
+```json
+{
+	"plugins": ["file:///path/to/opencode-auto-backup"]
+}
+```
+
+## Usage
+
+### Automatic Pre-Edit Backups (Server Hook & Tools)
+
+Once enabled, the plugin snapshots files automatically during normal coding sessions:
+
+- **Automatic Pre-Edit Snapshots (`execute.before` hook)**: Before `edit`, `write`, `patch`, `apply_patch`, or `multiedit` modifies an existing file on disk, the plugin copies the unmodified file into `<project-root>/.backups/<YYYY-MM-DD_HH-mm-ss>_<slug>/<relative-path>`.
+- **Agent Tools (`backup_list` & `backup_restore`)**: You can also ask the agent in chat to list or restore recent backups if needed.
+
+### Zero-Token TUI Commands
+
+1. **Interactive `/backups` popup**: Run `/backups` (aliases: `/backup`, `/restore`, `/snapshots`) or `/backups <query>` to open the split-pane snapshot browser.
+2. **Command palette**: Press `Ctrl+P` and select `Browse & restore file backups (0 tokens)...`.
+3. **Custom keybind**: Bind `auto.backup.browse` in `~/.config/opencode/cli.json` (the one-command installer binds `ctrl+alt+b` by default):
+
+```json
+{
+	"keybinds": {
+		"auto.backup.browse": "ctrl+alt+b"
+	}
+}
+```
+
+## TUI Query Syntax (`/backups`)
+
+Type search terms in the search bar to filter across all discovered snapshots, or combine them with the interactive filter pills (`^t` tool, `^g` date, `^r` retention).
+
+| Syntax | Description | Example |
+| :--- | :--- | :--- |
+| `term1 term2` | Multi-term AND substring match across relative file path, `.backups` folder path, original path, project root, snapshot ID, and slug | `butte index.html` |
+| `<filename>` | Filter snapshots for a specific file name or extension | `tui.ts` |
+| `<project-folder>` | Filter snapshots belonging to a specific project or client subfolder | `winnipeg` |
+| `auto-edit` / `pre-restore` | Filter snapshots by slug or tool prefix (or press `Ctrl+T` to cycle the `tool:` pill) | `pre-restore` |
+
+## Keyboard Shortcuts (`/backups`)
+
+| Key | Action |
+| :--- | :--- |
+| `Enter` | Open the 3-option Action Popup for the selected snapshot: **[1] Restore file**, **[2] Open backup file**, or **[3] Open diff in editor** |
+| `1` / `R` *(in action popup)* | Restore selected snapshot to disk (creates a `pre-restore` safety backup first) |
+| `2` / `O` *(in action popup)* | Open the snapshot file in your default OS editor (or `$OPENCODE_BACKUP_EDITOR` / `$VISUAL` / `$EDITOR`) |
+| `3` / `D` *(in action popup)* | Open a side-by-side diff (`backup` vs `current` on disk) in VS Code (`code --diff`) or `$OPENCODE_BACKUP_DIFF_CMD` |
+| `Up` / `Down` or `Ctrl+K` / `Ctrl+J` | Select snapshot (or scroll diff by 2 lines when Preview pane is focused; `j`/`k` also work in List and Preview panes) |
+| `PageUp` / `PageDown` | Jump 6 snapshots up/down (or scroll diff by 8 lines in Preview pane) |
+| `Tab` / `Shift+Tab` | Switch focus between Search Input, Snapshots List, and Diff Preview Pane |
+| `Ctrl+T` | Cycle tool filter pill (`all` -> `edit` -> `write` -> `patch` -> `pre-restore`) |
+| `Ctrl+G` | Cycle date filter pill (`all` -> `24h` -> `7d` -> `30d`) |
+| `Ctrl+R` | Cycle auto-prune retention pill (`30d` -> `14d` -> `7d` -> `5d` -> `0d (Never)`) |
+| `Ctrl+D` | Prune snapshots older than current `retentionDays` |
+| `Ctrl+U` | Clear the active search query and reset tool/date filters |
+| `Esc` | Close action popup or modal |
 
 ## How It Works (Architecture & Internals)
 
@@ -179,23 +236,23 @@ When pruning runs (`pruneOldBackups(rootDir, retentionDays)`):
 
 ### 7. Agent Tools Registered by the Server Plugin
 
-| Tool Name        | Required Inputs | Optional Inputs                 | Behavior                                                                                                                                                                |
-| ---------------- | --------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backup_list`    | _(none)_        | `query`, `limit` (default `20`) | Scans the workspace and subprojects (`includeSubprojects: true`), filters by `relativePath`, `snapshotId`, or `slug`, and returns matching entries sorted newest-first. |
-| `backup_restore` | `snapshotId`    | `relativePath`                  | Creates a `pre-restore` safety snapshot of the current file on disk, then copies the snapshot file back to its original path.                                           |
+| Tool Name | Required Inputs | Optional Inputs | Behavior |
+| :--- | :--- | :--- | :--- |
+| `backup_list` | *(none)* | `query`, `limit` (default `20`) | Scans the workspace and subprojects (`includeSubprojects: true`), filters by `relativePath`, `snapshotId`, or `slug`, and returns matching entries sorted newest-first. |
+| `backup_restore` | `snapshotId` | `relativePath` | Creates a `pre-restore` safety snapshot of the current file on disk, then copies the snapshot file back to its original path. |
 
 ### 8. Token Usage Breakdown
 
 Normal backup, diff preview, and restore operations use zero LLM tokens:
 
-| Operation                                          | Token Cost                                            | Why                                                                                                                                                                                                                      |
-| -------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Automatic pre-edit backups (`execute.before` hook) | **0 tokens**                                          | Runs in plain Node.js inside OpenCode before `edit`, `write`, `patch`, `apply_patch`, or `multiedit` touches disk; injects no system prompt rules and appends nothing to chat                                            |
-| Interactive `/backups` TUI modal (`Ctrl+Alt+B`)    | **0 tokens**                                          | Filtering snapshots, computing hunk diffs (`computeUnifiedDiff`), restoring files (`1`), opening files/diffs (`2`/`3`), cycling retention (`Ctrl+R`), and pruning (`Ctrl+D`) run directly on disk without an LLM request |
-| Standalone CLI (`npx opencode-auto-backup ...`)    | **0 tokens**                                          | Runs directly in Node.js outside the model turn                                                                                                                                                                          |
-| Agent tools (`backup_list`, `backup_restore`)      | **~120 schema tokens** (+ turn tokens only if called) | Tool definitions are registered with the server so you can ask the agent to list or restore a snapshot in chat; using `/backups` instead avoids calling these tools                                                      |
+| Operation | Token Cost | Why |
+| :--- | :--- | :--- |
+| Automatic pre-edit backups (`execute.before` hook) | **0 tokens** | Runs in plain Node.js inside OpenCode before `edit`, `write`, `patch`, `apply_patch`, or `multiedit` touches disk; injects no system prompt rules and appends nothing to chat |
+| Interactive `/backups` TUI modal (`Ctrl+Alt+B`) | **0 tokens** | Filtering snapshots, computing hunk diffs (`computeUnifiedDiff`), restoring files (`1`), opening files/diffs (`2`/`3`), cycling retention (`Ctrl+R`), and pruning (`Ctrl+D`) run directly on disk without an LLM request |
+| Standalone CLI (`npx opencode-auto-backup ...`) | **0 tokens** | Runs directly in Node.js outside the model turn |
+| Agent tools (`backup_list`, `backup_restore`) | **~120 schema tokens** (+ turn tokens only if called) | Tool definitions are registered with the server so you can ask the agent to list or restore a snapshot in chat; using `/backups` instead avoids calling these tools |
 
-## Snapshot Directory Structure
+## Directory Structure
 
 ```text
 <project-root>/
@@ -233,7 +290,7 @@ Each snapshot's `.backup-meta.json` stores the file manifest used by `/backups` 
 
 ## CLI Commands
 
-```bash
+```sh
 # Install into OpenCode server + TUI config
 npx opencode-auto-backup install
 
@@ -270,15 +327,15 @@ Settings are stored in `~/.config/opencode/auto-backup.json` (created automatica
 }
 ```
 
-| Option          | Env Variable                     | Default                            | Description                                                                                                                 |
-| --------------- | -------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `retentionDays` | `OPENCODE_BACKUP_RETENTION_DAYS` | `30`                               | Days to keep backup snapshots before auto-pruning (`0` = never auto-prune)                                                  |
-| `debounceMs`    | `OPENCODE_BACKUP_DEBOUNCE_MS`    | `0`                                | Minimum milliseconds between automatic snapshots of the same file (`0` = every single edit)                                 |
-| `rootDir`       | `OPENCODE_BACKUP_ROOT_DIR`       | `""` _(auto-detect)_               | Starting root directory for discovering all `.backups/` folders across subprojects (`npx opencode-auto-backup root <path>`) |
-| `backupRoot`    | `OPENCODE_BACKUP_ROOT`           | _(auto)_                           | Optional fixed destination directory where new `.backups/` snapshots are written instead of per-project root detection      |
-| `dialogWidth`   | `OPENCODE_BACKUP_DIALOG_WIDTH`   | `"80%"`                            | Width of the centered `/backups` TUI modal (`"80%"` or column count like `120`; also respects `OPENCODE_DIALOG_WIDTH`)      |
-| _(editor)_      | `OPENCODE_BACKUP_EDITOR`         | `$VISUAL` / `$EDITOR` / OS default | Command used when choosing **[2] Open backup file** in the `/backups` action popup                                          |
-| _(diff cmd)_    | `OPENCODE_BACKUP_DIFF_CMD`       | `code --diff`                      | Command used when choosing **[3] Open diff in editor** (`backup` vs `current` on disk)                                      |
+| Option | Env Variable | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `retentionDays` | `OPENCODE_BACKUP_RETENTION_DAYS` | `30` | Days to keep backup snapshots before auto-pruning (`0` = never auto-prune) |
+| `debounceMs` | `OPENCODE_BACKUP_DEBOUNCE_MS` | `0` | Minimum milliseconds between automatic snapshots of the same file (`0` = every single edit) |
+| `rootDir` | `OPENCODE_BACKUP_ROOT_DIR` | `""` *(auto-detect)* | Starting root directory for discovering all `.backups/` folders across subprojects (`npx opencode-auto-backup root <path>`) |
+| `backupRoot` | `OPENCODE_BACKUP_ROOT` | *(auto)* | Optional fixed destination directory where new `.backups/` snapshots are written instead of per-project root detection |
+| `dialogWidth` | `OPENCODE_BACKUP_DIALOG_WIDTH` | `"80%"` | Width of the centered `/backups` TUI modal (`"80%"` or column count like `120`; also respects `OPENCODE_DIALOG_WIDTH`) |
+| *(editor)* | `OPENCODE_BACKUP_EDITOR` | `$VISUAL` / `$EDITOR` / OS default | Command used when choosing **[2] Open backup file** in the `/backups` action popup |
+| *(diff cmd)* | `OPENCODE_BACKUP_DIFF_CMD` | `code --diff` | Command used when choosing **[3] Open diff in editor** (`backup` vs `current` on disk) |
 
 ## License
 
