@@ -26,7 +26,13 @@ const PROJECT_MARKERS = [
 const EDIT_TOOLS = new Set(["edit", "write", "patch", "apply_patch", "multiedit"]);
 const lastFileBackupMap = new Map();
 const lastRootPruneMap = new Map();
+const MAX_TRACKED_FILES = 1000;
+const MAX_TRACKED_ROOTS = 256;
 const PRUNE_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_DIFF_FILE_BYTES = 512 * 1024; // 512 KB cap for synchronous TUI diff
+let cachedSettingsPath = "";
+let cachedSettingsMtime = -1;
+let cachedSettingsValue = null;
 
 // Config & Installer
 
@@ -36,6 +42,9 @@ function resolveConfigDir(customConfigDir) {
       return path.join(os.homedir(), customConfigDir.slice(1));
     }
     return path.resolve(customConfigDir);
+  }
+  if (process.env.OPENCODE_CONFIG_DIR) {
+    return path.resolve(process.env.OPENCODE_CONFIG_DIR);
   }
   const configBase = process.env.XDG_CONFIG_HOME
     ? path.resolve(process.env.XDG_CONFIG_HOME)
@@ -50,10 +59,18 @@ function getSettingsFilePath(customConfigDir) {
 function readBackupSettings(customConfigDir) {
   const filePath = getSettingsFilePath(customConfigDir);
   const defaults = { retentionDays: 30, debounceMs: 0, rootDir: "", dialogWidth: "80%" };
-  if (!fs.existsSync(filePath)) return defaults;
+  let st;
+  try {
+    st = fs.statSync(filePath);
+  } catch {
+    return defaults;
+  }
+  if (cachedSettingsValue && cachedSettingsPath === filePath && cachedSettingsMtime === st.mtimeMs) {
+    return cachedSettingsValue;
+  }
   try {
     const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    return {
+    const result = {
       retentionDays: typeof parsed.retentionDays === "number" && !Number.isNaN(parsed.retentionDays)
         ? Math.max(0, Math.floor(parsed.retentionDays))
         : 30,
@@ -67,6 +84,10 @@ function readBackupSettings(customConfigDir) {
           ? (parsed.dialogWidth <= 100 ? Math.round(parsed.dialogWidth) + "%" : String(Math.round(parsed.dialogWidth)))
           : "80%"
     };
+    cachedSettingsPath = filePath;
+    cachedSettingsMtime = st.mtimeMs;
+    cachedSettingsValue = result;
+    return result;
   } catch {
     return defaults;
   }
@@ -94,6 +115,9 @@ function writeBackupSettings(patch, customConfigDir) {
   };
   const filePath = path.join(configDir, "auto-backup.json");
   fs.writeFileSync(filePath, JSON.stringify(next, null, 2) + "\n", "utf8");
+  cachedSettingsPath = "";
+  cachedSettingsMtime = -1;
+  cachedSettingsValue = null;
   return { filePath: filePath, settings: next };
 }
 
@@ -124,7 +148,7 @@ function addPluginToJsoncFile(filePath, schemaUrl, pluginEntryStr, pkgName) {
   }
 
   const raw = fs.readFileSync(filePath, "utf8");
-  if (raw.includes('"' + pkgName + '"')) {
+  if (raw.includes(pkgName)) {
     return "already-present";
   }
 
@@ -166,7 +190,8 @@ async function installPlugin(options) {
   const configDir = resolveConfigDir(opts.configDir);
   fs.mkdirSync(configDir, { recursive: true });
 
-  const pkgName = "opencode-local-backup";
+  const pkgName = "@nandoblanco/opencode-local-backup";
+  const matchKey = "opencode-local-backup";
   const entryStr = opts.retentionDays
     ? '["' + pkgName + '", { "retentionDays": ' + Number(opts.retentionDays) + " }]"
     : '"' + pkgName + '"';
@@ -185,13 +210,13 @@ async function installPlugin(options) {
     serverConfigFile,
     "https://" + cliName + ".ai/config.json",
     entryStr,
-    pkgName
+    matchKey
   );
   const cliStatus = addPluginToJsoncFile(
     cliConfigFile,
     "https://" + cliName + ".ai/v2/cli.json",
     entryStr,
-    pkgName
+    matchKey
   );
 
   return {

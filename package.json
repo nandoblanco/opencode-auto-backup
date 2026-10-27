@@ -1,6 +1,9 @@
 {
-  "name": "opencode-local-backup",
+  "name": "@nandoblanco/opencode-local-backup",
   "version": "1.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Local-first, zero-token automatic pre-edit file backup plugin for OpenCode with smart project-root resolution, multi-file patch support, retention pruning, and an interactive /backups diff and restore TUI popup.",
   "type": "module",
   "main": "./index.js",
