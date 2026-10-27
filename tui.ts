@@ -93,8 +93,12 @@ function splitHighlightedText(
   text: string,
   term: string
 ): Array<{ text: string; match: boolean }> {
-  const clean = term.trim().toLowerCase();
-  if (!clean) {
+  const words = term
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
+  if (!words.length) {
     return [{ text, match: false }];
   }
   const parts: Array<{ text: string; match: boolean }> = [];
@@ -102,21 +106,29 @@ function splitHighlightedText(
   let cursor = 0;
 
   while (cursor < text.length) {
-    const idx = lower.indexOf(clean, cursor);
-    if (idx === -1) {
+    let bestIdx = -1;
+    let bestLen = 0;
+    for (const w of words) {
+      const idx = lower.indexOf(w, cursor);
+      if (idx !== -1 && (bestIdx === -1 || idx < bestIdx || (idx === bestIdx && w.length > bestLen))) {
+        bestIdx = idx;
+        bestLen = w.length;
+      }
+    }
+    if (bestIdx === -1) {
       parts.push({ text: text.slice(cursor), match: false });
       break;
     }
-    if (idx > cursor) {
-      parts.push({ text: text.slice(cursor, idx), match: false });
+    if (bestIdx > cursor) {
+      parts.push({ text: text.slice(cursor, bestIdx), match: false });
     }
-    parts.push({ text: text.slice(idx, idx + clean.length), match: true });
-    cursor = idx + clean.length;
+    parts.push({ text: text.slice(bestIdx, bestIdx + bestLen), match: true });
+    cursor = bestIdx + bestLen;
   }
   return parts.length ? parts : [{ text, match: false }];
 }
 
-async function loadTuiRenderer() {
+function createTuiRenderer() {
   function el(
     tag: string,
     props?: Record<string, unknown> | null,
@@ -1330,7 +1342,7 @@ export default {
       return;
     }
     const workspaceDir = context.location?.directory ?? process.cwd();
-    const renderDialogPromise = loadTuiRenderer().catch(() => null);
+    const renderDialog = createTuiRenderer();
 
     const openBackupsPopup = async (rawArgs?: unknown) => {
       const initialQuery =
@@ -1339,12 +1351,6 @@ export default {
           : typeof (rawArgs as { arguments?: unknown } | undefined)?.arguments === "string"
             ? ((rawArgs as { arguments: string }).arguments).trim()
             : "";
-
-      const renderDialog = await renderDialogPromise;
-      if (!renderDialog) {
-        await openFallbackSelectDialog(context, workspaceDir, initialQuery);
-        return;
-      }
 
       try {
         context.ui.dialog.show(() =>
@@ -1364,68 +1370,72 @@ export default {
       }
     };
 
+    let layerRegistered = false;
     context.ui.slot({
       append: "app",
       render() {
-        context.keymap.layer(() => ({
-          mode: "global",
-          commands: [
-            {
-              id: "auto.backup.browse",
-              title: "Browse & restore file backups (0 tokens)...",
-              description:
-                "Interactive zero-token popup to browse .backups/ snapshots, preview diffs, restore files, or open backup files",
-              category: "Backup",
-              palette: true,
-              slash: {
-                name: "backups",
-                arguments: true
+        if (!layerRegistered) {
+          layerRegistered = true;
+          context.keymap.layer(() => ({
+            mode: "global",
+            commands: [
+              {
+                id: "auto.backup.browse",
+                title: "Browse & restore file backups (0 tokens)...",
+                description:
+                  "Interactive zero-token popup to browse .backups/ snapshots, preview diffs, restore files, or open backup files",
+                category: "Backup",
+                palette: true,
+                slash: {
+                  name: "backups",
+                  arguments: true
+                },
+                run: (input) => {
+                  void openBackupsPopup(input);
+                }
               },
-              run: (input) => {
-                void openBackupsPopup(input);
-              }
-            },
-            {
-              id: "auto.backup.browse.alias.backup",
-              title: "Browse & restore file backups (/backup)",
-              category: "Backup",
-              palette: false,
-              slash: {
-                name: "backup",
-                arguments: true
+              {
+                id: "auto.backup.browse.alias.backup",
+                title: "Browse & restore file backups (/backup)",
+                category: "Backup",
+                palette: false,
+                slash: {
+                  name: "backup",
+                  arguments: true
+                },
+                run: (input) => {
+                  void openBackupsPopup(input);
+                }
               },
-              run: (input) => {
-                void openBackupsPopup(input);
-              }
-            },
-            {
-              id: "auto.backup.browse.alias.restore",
-              title: "Browse & restore file backups (/restore)",
-              category: "Backup",
-              palette: false,
-              slash: {
-                name: "restore",
-                arguments: true
+              {
+                id: "auto.backup.browse.alias.restore",
+                title: "Browse & restore file backups (/restore)",
+                category: "Backup",
+                palette: false,
+                slash: {
+                  name: "restore",
+                  arguments: true
+                },
+                run: (input) => {
+                  void openBackupsPopup(input);
+                }
               },
-              run: (input) => {
-                void openBackupsPopup(input);
+              {
+                id: "auto.backup.browse.alias.snapshots",
+                title: "Browse & restore file backups (/snapshots)",
+                category: "Backup",
+                palette: false,
+                slash: {
+                  name: "snapshots",
+                  arguments: true
+                },
+                run: (input) => {
+                  void openBackupsPopup(input);
+                }
               }
-            },
-            {
-              id: "auto.backup.browse.alias.snapshots",
-              title: "Browse & restore file backups (/snapshots)",
-              category: "Backup",
-              palette: false,
-              slash: {
-                name: "snapshots",
-                arguments: true
-              },
-              run: (input) => {
-                void openBackupsPopup(input);
-              }
-            }
-          ]
-        }));
+            ]
+          }));
+        }
         return null;
       }
     });

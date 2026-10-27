@@ -251,3 +251,68 @@ test("installPlugin writes plugin entry into opencode.jsonc and cli.json", async
     fs.rmSync(tmpConfig, { recursive: true, force: true });
   }
 });
+
+test("security & bug fixes: tuple JSONC preservation, path traversal rejection, and binary diff guard", async function () {
+  const root = makeTempProject();
+  const tmpConfig = fs.mkdtempSync(path.join(os.tmpdir(), "opencode-local-backup-tuple-"));
+  try {
+    // 1. Existing tuple entry + trailing comment in opencode.jsonc must not be corrupted
+    const jsoncFile = path.join(tmpConfig, "opencode.jsonc");
+    fs.writeFileSync(
+      jsoncFile,
+      '{\n  "plugins": [\n    ["some-other-plugin", { "foo": 1 }] // comment\n  ]\n}\n',
+      "utf8"
+    );
+    const installRes = await installPlugin({ configDir: tmpConfig });
+    assert.equal(installRes.serverStatus, "updated");
+    const updatedRaw = fs.readFileSync(jsoncFile, "utf8");
+    assert.ok(updatedRaw.includes('["some-other-plugin", { "foo": 1 }], // comment'));
+    assert.ok(updatedRaw.includes('"@nandoblanco/opencode-local-backup"'));
+
+    // 2. Path traversal in .backup-meta.json is rejected on listBackups and restoreBackupFile
+    const evilSnap = path.join(root, ".backups", "2026-10-26_12-00-00_000_evil");
+    fs.mkdirSync(evilSnap, { recursive: true });
+    const outsideTarget = path.join(os.tmpdir(), "outside-pwned.txt");
+    const insideFile = path.join(evilSnap, "payload.txt");
+    fs.writeFileSync(insideFile, "evil", "utf8");
+    fs.writeFileSync(
+      path.join(evilSnap, ".backup-meta.json"),
+      JSON.stringify({
+        id: "2026-10-26_12-00-00_000_evil",
+        createdAt: Date.now(),
+        tool: "edit",
+        root: root,
+        files: [
+          {
+            relativePath: "../../outside-pwned.txt",
+            originalPath: outsideTarget,
+            size: 4
+          }
+        ]
+      }),
+      "utf8"
+    );
+    const listed = listBackups(root);
+    assert.equal(listed.length, 0);
+
+    assert.throws(function () {
+      restoreBackupFile({
+        root: root,
+        backupPath: insideFile,
+        originalPath: outsideTarget,
+        relativePath: "../../outside-pwned.txt"
+      });
+    }, /outside project root/);
+
+    // 3. Binary file is detected by NUL bytes in computeUnifiedDiff
+    const binA = path.join(root, "a.bin");
+    const binB = path.join(root, "b.bin");
+    fs.writeFileSync(binA, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01]));
+    fs.writeFileSync(binB, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x02]));
+    const diffRes = computeUnifiedDiff(binA, binB);
+    assert.equal(diffRes.status, "binary");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(tmpConfig, { recursive: true, force: true });
+  }
+});

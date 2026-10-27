@@ -132,6 +132,99 @@ function resolveRetentionDays(explicitValue, customConfigDir) {
   return readBackupSettings(customConfigDir).retentionDays;
 }
 
+function findPluginsArraySpan(raw) {
+  const keyRe = /"plugins"\s*:\s*\[/g;
+  const match = keyRe.exec(raw);
+  if (!match) return null;
+  const openBracketIdx = match.index + match[0].length - 1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = openBracketIdx; i < raw.length; i++) {
+    const ch = raw[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === "/" && raw[i + 1] === "/") {
+      const nl = raw.indexOf("\n", i + 2);
+      if (nl === -1) break;
+      i = nl;
+      continue;
+    }
+    if (ch === "/" && raw[i + 1] === "*") {
+      const endComment = raw.indexOf("*/", i + 2);
+      if (endComment === -1) break;
+      i = endComment + 1;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === "[") depth++;
+    else if (ch === "]") {
+      depth--;
+      if (depth === 0) {
+        return {
+          start: match.index,
+          openEnd: openBracketIdx + 1,
+          closeStart: i,
+          end: i + 1
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function findLastCodeCharIndex(str) {
+  let lastIdx = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (inString) {
+      lastIdx = i;
+      if (escaped) {
+        escaped = false;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === "/" && str[i + 1] === "/") {
+      const nl = str.indexOf("\n", i + 2);
+      if (nl === -1) break;
+      i = nl;
+      continue;
+    }
+    if (ch === "/" && str[i + 1] === "*") {
+      const endComment = str.indexOf("*/", i + 2);
+      if (endComment === -1) break;
+      i = endComment + 1;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      lastIdx = i;
+      continue;
+    }
+    if (!/\s/.test(ch)) {
+      lastIdx = i;
+    }
+  }
+  return lastIdx;
+}
+
 function addPluginToJsoncFile(filePath, schemaUrl, pluginEntryStr, pkgName) {
   if (!fs.existsSync(filePath)) {
     const content = [
@@ -152,29 +245,40 @@ function addPluginToJsoncFile(filePath, schemaUrl, pluginEntryStr, pkgName) {
     return "already-present";
   }
 
-  const pluginsArrRe = /("plugins"\s*:\s*\[)([\s\S]*?)(\])/;
-  const match = raw.match(pluginsArrRe);
-  if (match) {
-    const inner = match[2].trim();
-    const updated = raw.replace(pluginsArrRe, function (_, open, body, close) {
-      if (!inner) {
-        return open + "\n    " + pluginEntryStr + "\n  " + close;
-      }
-      const trimmedBody = body.replace(/\s*$/, "");
-      const needsComma = !trimmedBody.endsWith(",");
-      return open + trimmedBody + (needsComma ? "," : "") + "\n    " + pluginEntryStr + "\n  " + close;
-    });
+  const span = findPluginsArraySpan(raw);
+  if (span) {
+    const open = raw.slice(span.start, span.openEnd);
+    const body = raw.slice(span.openEnd, span.closeStart);
+    const close = raw.slice(span.closeStart, span.end);
+    const lastCodeIdx = findLastCodeCharIndex(body);
+    let replacement;
+    if (lastCodeIdx === -1) {
+      replacement = open + "\n    " + pluginEntryStr + "\n  " + close;
+    } else {
+      const needsComma = body[lastCodeIdx] !== ",";
+      const withComma = needsComma
+        ? body.slice(0, lastCodeIdx + 1) + "," + body.slice(lastCodeIdx + 1)
+        : body;
+      const trimmedBody = withComma.replace(/\s*$/, "");
+      replacement = open + trimmedBody + "\n    " + pluginEntryStr + "\n  " + close;
+    }
+    const updated = raw.slice(0, span.start) + replacement + raw.slice(span.end);
     fs.writeFileSync(filePath, updated, "utf8");
     return "updated";
   }
 
   const lastBraceIdx = raw.lastIndexOf("}");
   if (lastBraceIdx !== -1) {
-    const before = raw.slice(0, lastBraceIdx).replace(/\s*$/, "");
-    const needsComma = !before.endsWith("{") && !before.endsWith(",");
+    const beforeSlice = raw.slice(0, lastBraceIdx);
+    const lastCodeIdx = findLastCodeCharIndex(beforeSlice);
+    const lastChar = lastCodeIdx !== -1 ? beforeSlice[lastCodeIdx] : "{";
+    const needsComma = lastChar !== "{" && lastChar !== ",";
+    const withComma = (needsComma && lastCodeIdx !== -1)
+      ? beforeSlice.slice(0, lastCodeIdx + 1) + "," + beforeSlice.slice(lastCodeIdx + 1)
+      : beforeSlice;
+    const before = withComma.replace(/\s*$/, "");
     const updated =
       before +
-      (needsComma ? "," : "") +
       '\n  "plugins": [\n    ' +
       pluginEntryStr +
       "\n  ]\n}\n";
@@ -439,9 +543,9 @@ function createBackupSnapshot(options) {
     const abs = explicitRoot && !path.isAbsolute(f)
       ? path.resolve(explicitRoot, f)
       : path.resolve(f);
-    if (!fs.existsSync(abs)) continue;
+    let st;
     try {
-      const st = fs.statSync(abs);
+      st = fs.statSync(abs);
       if (!st.isFile()) continue;
     } catch {
       continue;
@@ -450,14 +554,14 @@ function createBackupSnapshot(options) {
       const prev = lastFileBackupMap.get(abs) || 0;
       if (now - prev < debounceMs) continue;
     }
-    existingFiles.push(abs);
+    existingFiles.push({ abs: abs, size: st.size, mtimeMs: st.mtimeMs });
   }
 
   if (existingFiles.length === 0) {
     return null;
   }
 
-  const rootDir = explicitRoot || resolveProjectRoot(existingFiles[0], workspaceDir);
+  const rootDir = explicitRoot || resolveProjectRoot(existingFiles[0].abs, workspaceDir);
   const stamp = formatTimestamp(new Date(now));
   const snapshotId = stamp + "_" + slug;
   const backupsBase = path.join(rootDir, ".backups");
@@ -470,7 +574,8 @@ function createBackupSnapshot(options) {
   }
 
   const backedUpFiles = [];
-  for (const absFile of existingFiles) {
+  for (const item of existingFiles) {
+    const absFile = item.abs;
     let relPath = path.relative(rootDir, absFile);
     if (!relPath || relPath.startsWith("..") || path.isAbsolute(relPath)) {
       relPath = path.basename(absFile);
@@ -478,14 +583,17 @@ function createBackupSnapshot(options) {
     const targetPath = path.join(snapshotDir, relPath);
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
     fs.copyFileSync(absFile, targetPath);
-    const st = fs.statSync(absFile);
+    if (lastFileBackupMap.size >= MAX_TRACKED_FILES && !lastFileBackupMap.has(absFile)) {
+      const oldestKey = lastFileBackupMap.keys().next().value;
+      if (oldestKey !== undefined) lastFileBackupMap.delete(oldestKey);
+    }
     lastFileBackupMap.set(absFile, now);
     backedUpFiles.push({
       relativePath: normalizeSlashes(relPath),
       originalPath: absFile,
       backupPath: targetPath,
-      size: st.size,
-      mtimeMs: st.mtimeMs
+      size: item.size,
+      mtimeMs: item.mtimeMs
     });
   }
 
@@ -514,6 +622,10 @@ function createBackupSnapshot(options) {
 
   const lastPrune = lastRootPruneMap.get(rootDir) || 0;
   if (retentionDays > 0 && (opts.pruneNow || now - lastPrune >= PRUNE_INTERVAL_MS)) {
+    if (lastRootPruneMap.size >= MAX_TRACKED_ROOTS && !lastRootPruneMap.has(rootDir)) {
+      const oldestRoot = lastRootPruneMap.keys().next().value;
+      if (oldestRoot !== undefined) lastRootPruneMap.delete(oldestRoot);
+    }
     lastRootPruneMap.set(rootDir, now);
     pruneOldBackups(rootDir, retentionDays);
   }
@@ -689,9 +801,14 @@ function listBackups(rootDir, options) {
           if (meta.tool) tool = meta.tool;
           if (Array.isArray(meta.files)) {
             for (const f of meta.files) {
-              const bPath = path.join(snapDir, f.relativePath);
+              if (!f || typeof f.relativePath !== "string" || !f.relativePath) continue;
+              const bPath = path.resolve(snapDir, f.relativePath);
+              if (bPath === path.resolve(snapDir) || !isSubPath(snapDir, bPath)) continue;
               if (!fs.existsSync(bPath)) continue;
-              const origPath = f.originalPath || path.join(r, f.relativePath);
+              const origPath = f.originalPath
+                ? path.resolve(String(f.originalPath))
+                : path.resolve(r, f.relativePath);
+              if (!isSubPath(r, origPath) || isSubPath(backupsDir, origPath)) continue;
               items.push({
                 id: d.name + "::" + f.relativePath,
                 snapshotId: d.name,
@@ -699,8 +816,8 @@ function listBackups(rootDir, options) {
                 slug: slug,
                 tool: tool,
                 timeMs: timeMs,
-                relativePath: normalizeSlashes(f.relativePath),
-                fileName: path.basename(f.relativePath),
+                relativePath: normalizeSlashes(path.relative(snapDir, bPath)),
+                fileName: path.basename(bPath),
                 backupPath: bPath,
                 originalPath: origPath,
                 size: typeof f.size === "number" ? f.size : fs.statSync(bPath).size
@@ -748,20 +865,49 @@ function listBackups(rootDir, options) {
   return items;
 }
 
+function readTextSafeForDiff(filePath) {
+  let st;
+  try {
+    st = fs.statSync(filePath);
+  } catch {
+    return { status: "missing" };
+  }
+  if (!st.isFile()) {
+    return { status: "binary" };
+  }
+  if (st.size > MAX_DIFF_FILE_BYTES) {
+    return { status: "too-large", size: st.size };
+  }
+  try {
+    const buf = fs.readFileSync(filePath);
+    const probeLen = Math.min(buf.length, 4096);
+    for (let i = 0; i < probeLen; i++) {
+      if (buf[i] === 0) {
+        return { status: "binary" };
+      }
+    }
+    return { status: "ok", text: buf.toString("utf8") };
+  } catch {
+    return { status: "binary" };
+  }
+}
+
 function computeUnifiedDiff(backupFilePath, currentFilePath, maxLines) {
   const limit = typeof maxLines === "number" && maxLines > 0 ? maxLines : 160;
-  if (!fs.existsSync(backupFilePath)) {
+  const backupRead = readTextSafeForDiff(backupFilePath);
+  if (backupRead.status === "missing") {
     return { status: "missing-backup", summary: "Backup file missing", lines: [] };
   }
-
-  let backupText = "";
-  try {
-    backupText = fs.readFileSync(backupFilePath, "utf8");
-  } catch {
+  if (backupRead.status === "too-large") {
+    return { status: "binary", summary: "File too large for inline diff (" + Math.round(backupRead.size / 1024) + " KB)", lines: [] };
+  }
+  if (backupRead.status !== "ok") {
     return { status: "binary", summary: "Binary or unreadable file", lines: [] };
   }
+  const backupText = backupRead.text;
 
-  if (!fs.existsSync(currentFilePath)) {
+  const currentRead = readTextSafeForDiff(currentFilePath);
+  if (currentRead.status === "missing") {
     const bLines = backupText.split(/\r?\n/);
     return {
       status: "deleted",
@@ -771,13 +917,13 @@ function computeUnifiedDiff(backupFilePath, currentFilePath, maxLines) {
       })
     };
   }
-
-  let currentText = "";
-  try {
-    currentText = fs.readFileSync(currentFilePath, "utf8");
-  } catch {
+  if (currentRead.status === "too-large") {
+    return { status: "binary", summary: "File too large for inline diff (" + Math.round(currentRead.size / 1024) + " KB)", lines: [] };
+  }
+  if (currentRead.status !== "ok") {
     return { status: "binary", summary: "Binary or unreadable file", lines: [] };
   }
+  const currentText = currentRead.text;
 
   if (backupText === currentText) {
     const sameLines = backupText.split(/\r?\n/).slice(0, 40);
@@ -796,7 +942,6 @@ function computeUnifiedDiff(backupFilePath, currentFilePath, maxLines) {
   let added = 0;
   let removed = 0;
 
-  const maxLen = Math.max(oldLines.length, newLines.length);
   let i = 0;
   let j = 0;
 
@@ -867,8 +1012,6 @@ function computeUnifiedDiff(backupFilePath, currentFilePath, maxLines) {
         j++;
       }
     }
-
-    if (i > maxLen + 50 && j > maxLen + 50) break;
   }
 
   // Keep only changed lines plus 3 lines of context around each change (hunks)
@@ -916,12 +1059,27 @@ function restoreBackupFile(entry, options) {
   if (!entry || !entry.backupPath || !fs.existsSync(entry.backupPath)) {
     throw new Error("Backup snapshot file not found: " + (entry ? entry.backupPath : "unknown"));
   }
-  const targetPath = entry.originalPath || path.join(entry.root, entry.relativePath);
+  const absBackupPath = path.resolve(entry.backupPath);
+  const rootDir = entry.root ? path.resolve(entry.root) : "";
+  const rawTarget = entry.originalPath || (rootDir && entry.relativePath ? path.join(rootDir, entry.relativePath) : "");
+  if (!rawTarget) {
+    throw new Error("Invalid restore target path");
+  }
+  const targetPath = path.resolve(rawTarget);
+  if (rootDir) {
+    const backupsBase = path.join(rootDir, ".backups");
+    if (!isSubPath(backupsBase, absBackupPath) || absBackupPath === backupsBase) {
+      throw new Error("Refusing to restore from path outside project .backups directory: " + absBackupPath);
+    }
+    if (!isSubPath(rootDir, targetPath) || targetPath === rootDir || isSubPath(backupsBase, targetPath)) {
+      throw new Error("Refusing to restore file outside project root: " + targetPath);
+    }
+  }
 
   let safetySnapshot = null;
   if (!opts.skipSafetyBackup && fs.existsSync(targetPath)) {
     safetySnapshot = createBackupSnapshot({
-      root: entry.root,
+      root: rootDir || entry.root,
       name: "pre-restore",
       tool: "restore",
       files: [targetPath],
@@ -930,13 +1088,22 @@ function restoreBackupFile(entry, options) {
   }
 
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-  fs.copyFileSync(entry.backupPath, targetPath);
+  fs.copyFileSync(absBackupPath, targetPath);
 
   return {
     restoredPath: targetPath,
     fromSnapshot: entry.snapshotId,
     safetySnapshot: safetySnapshot ? safetySnapshot.snapshotDir : null
   };
+}
+
+function assertSafeWinShellPaths(paths) {
+  if (process.platform !== "win32") return;
+  for (const p of paths) {
+    if (/[&|<>^%\r\n\0]/.test(p)) {
+      throw new Error("Unsafe characters in file path for Windows shell launcher: " + p);
+    }
+  }
 }
 
 function openBackupFile(filePath) {
@@ -947,23 +1114,26 @@ function openBackupFile(filePath) {
 
   const customEditor = process.env.OPENCODE_BACKUP_EDITOR || process.env.VISUAL || process.env.EDITOR || "";
   if (customEditor) {
+    assertSafeWinShellPaths([absPath]);
     const child = spawn(customEditor, [absPath], {
       detached: true,
       stdio: "ignore",
       shell: process.platform === "win32"
     });
+    child.on("error", function () {});
     child.unref();
     return { openedPath: absPath, launcher: customEditor };
   }
 
   if (process.platform === "win32") {
-    const child = spawn("cmd.exe", ["/c", "start", "", absPath], {
+    const child = spawn("explorer.exe", [absPath], {
       detached: true,
       stdio: "ignore",
       windowsHide: true
     });
+    child.on("error", function () {});
     child.unref();
-    return { openedPath: absPath, launcher: "system-default (start)" };
+    return { openedPath: absPath, launcher: "system-default (explorer.exe)" };
   }
 
   const openCmd = process.platform === "darwin" ? "open" : "xdg-open";
@@ -971,6 +1141,7 @@ function openBackupFile(filePath) {
     detached: true,
     stdio: "ignore"
   });
+  child.on("error", function () {});
   child.unref();
   return { openedPath: absPath, launcher: openCmd };
 }
@@ -985,6 +1156,7 @@ function openBackupDiff(backupFilePath, currentFilePath) {
     throw new Error("Current file on disk not found: " + absCurrent);
   }
 
+  assertSafeWinShellPaths([absBackup, absCurrent]);
   const diffCmd = process.env.OPENCODE_BACKUP_DIFF_CMD || "code";
   const args = diffCmd === "code" ? ["--diff", absBackup, absCurrent] : [absBackup, absCurrent];
   const child = spawn(diffCmd, args, {
@@ -993,6 +1165,7 @@ function openBackupDiff(backupFilePath, currentFilePath) {
     shell: process.platform === "win32",
     windowsHide: true
   });
+  child.on("error", function () {});
   child.unref();
   return { backupPath: absBackup, currentPath: absCurrent, launcher: diffCmd + " --diff" };
 }
@@ -1199,8 +1372,15 @@ if (isDirectRun) {
   const cmd = process.argv[2] || "install";
 
   if (cmd === "install" || cmd === "init" || cmd === "setup") {
-    installPlugin().then(function (res) {
-      const settingsInfo = writeBackupSettings({});
+    let customConfigDir = "";
+    for (let i = 3; i < process.argv.length; i++) {
+      if ((process.argv[i] === "--dir" || process.argv[i] === "-d") && process.argv[i + 1]) {
+        customConfigDir = process.argv[i + 1];
+        i++;
+      }
+    }
+    installPlugin({ configDir: customConfigDir || undefined }).then(function (res) {
+      const settingsInfo = writeBackupSettings({}, customConfigDir || undefined);
       console.log("opencode-local-backup installed:");
       console.log("  Server config:   " + res.serverConfigFile + " (" + res.serverStatus + ")");
       console.log("  TUI config:      " + res.cliConfigFile + " (" + res.cliStatus + ")");
