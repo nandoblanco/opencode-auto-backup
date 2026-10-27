@@ -10,7 +10,7 @@
     "./tui": "./tui.ts"
   },
   "bin": {
-    "opencode-local-backup": "./index.js"
+    "opencode-local-backup": "index.js"
   },
   "files": [
     "index.js",
@@ -60,5 +60,8 @@
   },
   "author": "nandoblanco",
   "license": "MIT",
-  "repository": "github:nandoblanco/opencode-local-backup"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nandoblanco/opencode-local-backup.git"
+  }
 }
