@@ -98,7 +98,7 @@ Once enabled, the plugin snapshots files automatically during normal coding sess
 
 ### Zero-Token TUI Commands
 
-1. **Interactive `/backups` popup**: Run `/backups` (aliases: `/backup`, `/restore`, `/snapshots`) or `/backups <query>` to open the split-pane snapshot browser.
+1. **Interactive `/backups` popup**: Run `/backups` or `/backups <query>` to open the split-pane snapshot browser.
 2. **Command palette**: Press `Ctrl+P` and select `Browse & restore file backups (0 tokens)...`.
 3. **Custom keybind**: Bind `auto.backup.browse` in `~/.config/opencode/cli.json` (the one-command installer binds `ctrl+alt+b` by default):
 

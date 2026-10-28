@@ -664,105 +664,144 @@ function createTuiRenderer() {
           queueMicrotask(applyDialogWidth);
         },
         width: "100%",
-        height: 28,
+        height: 34,
         flexDirection: "column",
-        backgroundColor: () => theme().background.base
+        backgroundColor: () => theme().background.base,
+        paddingLeft: 2,
+        paddingRight: 2,
+        paddingTop: 1,
+        paddingBottom: 1,
+        gap: 1
       },
-      // 1. Header Bar
+      // 1. Header Bar (single-line, no wrapping)
       el(
         "box",
         {
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",
-          paddingX: 2,
-          paddingTop: 1,
-          flexShrink: 0
+          border: ["bottom"],
+          borderColor: () => theme().border.base,
+          paddingBottom: 0,
+          flexShrink: 0,
+          width: "100%"
         },
         el(
           "box",
-          { flexDirection: "row", gap: 2, alignItems: "center" },
+          { flexDirection: "row", gap: 2, alignItems: "center", flexShrink: 0 },
           el(
             "text",
             {
-              fg: () => theme().text.base,
+              wrapMode: "none",
+              flexShrink: 0,
+              fg: () => theme().text.action.primary.base,
               attributes: TextAttributes.BOLD
             },
-            "Auto-Backup Snapshots"
+            "opencode / backups"
           ),
           el(
             "text",
-            { fg: () => theme().text.muted },
-            () =>
-              statusMsg() ||
-              `${filtered().length} of ${allEntries().length} snapshots`
+            {
+              wrapMode: "none",
+              flexShrink: 0,
+              fg: () => theme().text.muted
+            },
+            () => props.context.ui.format.path(props.workspaceDir)
           )
         ),
         el(
-          "box",
-          { flexDirection: "row", gap: 2, alignItems: "center" },
-          el(
-            "text",
-            { fg: () => theme().text.muted },
-            () => props.context.ui.format.path(props.workspaceDir)
-          ),
-          el(
-            "box",
-            { paddingX: 1, onMouseUp: () => props.close() },
-            el("text", { fg: () => theme().text.muted }, "esc")
-          )
+          "text",
+          {
+            wrapMode: "none",
+            flexShrink: 0,
+            fg: () => theme().text.muted
+          },
+          "[↑↓] select  [Enter] actions  [Tab] pane  [Esc] close"
         )
       ),
 
-      // 2. Search Input + Colored Filter Pills Bar (matching session-search & local-memory)
+      // 2. Boxed Filter + Pills Card
       el(
         "box",
         {
           flexDirection: "column",
-          paddingX: 2,
-          paddingY: 1,
-          gap: 1,
+          backgroundColor: () =>
+            theme().background.raised?.base ?? theme().background.base,
+          border: true,
+          borderColor: () =>
+            focusPane() === "search" && !actionPopupOpen()
+              ? theme().text.action.primary.base
+              : theme().border.base,
+          paddingLeft: 2,
+          paddingRight: 2,
+          paddingTop: 0,
+          paddingBottom: 0,
+          gap: 0,
           flexShrink: 0,
-          border: ["bottom"],
-          borderColor: () => theme().border.base
+          width: "100%"
         },
         el(
           "box",
           {
             flexDirection: "row",
+            justifyContent: "space-between",
             alignItems: "center",
-            gap: 1
+            gap: 1,
+            width: "100%"
           },
           el(
             "text",
             {
-              fg: () =>
-                focusPane() === "search" && !actionPopupOpen()
-                  ? theme().text.action.primary.base
-                  : theme().text.muted,
+              width: 7,
+              wrapMode: "none",
+              flexShrink: 0,
+              fg: () => theme().text.action.primary.base,
               attributes: TextAttributes.BOLD
             },
-            "›"
+            "Filter:"
           ),
-          el("input", {
-            id: "auto-backup-search-input",
-            flexGrow: 1,
-            value: () => query(),
-            focused: () => focusPane() === "search" && !actionPopupOpen(),
-            maxLength: Number.POSITIVE_INFINITY,
-            placeholder:
-              "Filter backups by file path, parent folder, or snapshot slug... (0 tokens)",
-            placeholderColor: () => theme().text.muted,
-            textColor: () => theme().text.base,
-            focusedTextColor: () => theme().text.formfield.focused,
-            cursorColor: () => theme().text.formfield.focused,
-            backgroundColor: () => theme().background.base,
-            focusedBackgroundColor: () => theme().background.formfield.focused,
-            onMouseDown: () => setFocusPane("search"),
-            onInput: (val: string) => {
-              setQuery(typeof val === "string" ? val : "");
-            }
-          })
+          el(
+            "box",
+            {
+              flexGrow: 1,
+              flexShrink: 1,
+              minWidth: 0
+            },
+            el("input", {
+              id: "auto-backup-search-input",
+              width: "100%",
+              value: () => query(),
+              focused: () => focusPane() === "search" && !actionPopupOpen(),
+              maxLength: Number.POSITIVE_INFINITY,
+              placeholder:
+                "Filter backups by file path, parent folder, or snapshot slug...",
+              placeholderColor: () => theme().text.muted,
+              textColor: () => theme().text.base,
+              focusedTextColor: () => theme().text.formfield.focused,
+              cursorColor: () => theme().text.formfield.focused,
+              backgroundColor: () =>
+                theme().background.raised?.base ?? theme().background.base,
+              focusedBackgroundColor: () =>
+                theme().background.raised?.base ?? theme().background.base,
+              onMouseDown: () => setFocusPane("search"),
+              onInput: (val: string) => {
+                setQuery(typeof val === "string" ? val : "");
+              }
+            })
+          ),
+          el(
+            "text",
+            {
+              wrapMode: "none",
+              flexShrink: 0,
+              fg: () =>
+                theme().text.feedback?.success?.base ??
+                theme().text.action.primary.base
+            },
+            () =>
+              statusMsg() ||
+              `${filtered().length} of ${allEntries().length} snapshots · 0 tokens`
+          )
         ),
         // Colored Filter Pills Row
         el(
@@ -800,13 +839,8 @@ function createTuiRenderer() {
             active: () => false,
             onClick: handlePrune
           })
-        )
-      ),
-
-      // 3. Action Confirmation Sub-Popup (wrapped in its own container so @opentui/solid Show cleanup never clears rootRef siblings)
-      el(
-        "box",
-        { flexDirection: "column", flexShrink: 0 },
+        ),
+        // Action Confirmation Sub-Popup inside Filter Card (avoids extra gap row when closed)
         createComponent(Show, {
           get when() {
             return actionPopupOpen() && Boolean(selectedEntry());
@@ -816,14 +850,10 @@ function createTuiRenderer() {
               "box",
               {
                 flexDirection: "column",
-                marginX: 2,
-                marginTop: 1,
-                paddingX: 2,
-                paddingY: 1,
+                paddingTop: 1,
                 gap: 1,
-                border: ["top", "bottom", "left", "right"],
+                border: ["top"],
                 borderColor: () => theme().text.action.primary.base,
-                backgroundColor: () => theme().background.raised.base,
                 flexShrink: 0
               },
               el(
@@ -832,15 +862,16 @@ function createTuiRenderer() {
                 el(
                   "text",
                   {
+                    wrapMode: "none",
                     fg: () => theme().text.action.primary.base,
                     attributes: TextAttributes.BOLD
                   },
-                  () => `Action for: ${selectedEntry()?.relativePath ?? ""}`
+                  () => `◈ ACTION FOR: ${selectedEntry()?.relativePath ?? ""}`
                 ),
                 el(
                   "text",
-                  { fg: () => theme().text.muted },
-                  "↑/↓ or 1/2/3 choose · Enter confirm · Esc cancel"
+                  { wrapMode: "none", fg: () => theme().text.muted },
+                  "[↑↓ / 1-3] choose  [Enter] confirm  [Esc] cancel"
                 )
               ),
               el(
@@ -850,7 +881,7 @@ function createTuiRenderer() {
               ),
               el(
                 "box",
-                { flexDirection: "row", flexWrap: "wrap", gap: 2, marginTop: 0 },
+                { flexDirection: "row", flexWrap: "wrap", gap: 2 },
                 // Option 1: Restore
                 el(
                   "box",
@@ -869,6 +900,7 @@ function createTuiRenderer() {
                   el(
                     "text",
                     {
+                      wrapMode: "none",
                       fg: () =>
                         actionChoice() === 0
                           ? theme().text.action.primary.focused
@@ -877,7 +909,7 @@ function createTuiRenderer() {
                         actionChoice() === 0 ? TextAttributes.BOLD : undefined
                     },
                     () =>
-                      `${actionChoice() === 0 ? "› " : "  "}[1] Restore file`
+                      `${actionChoice() === 0 ? "▸ " : "  "}[1] Restore file`
                   )
                 ),
                 // Option 2: Open File
@@ -898,6 +930,7 @@ function createTuiRenderer() {
                   el(
                     "text",
                     {
+                      wrapMode: "none",
                       fg: () =>
                         actionChoice() === 1
                           ? theme().text.action.primary.focused
@@ -906,7 +939,7 @@ function createTuiRenderer() {
                         actionChoice() === 1 ? TextAttributes.BOLD : undefined
                     },
                     () =>
-                      `${actionChoice() === 1 ? "› " : "  "}[2] Open backup file`
+                      `${actionChoice() === 1 ? "▸ " : "  "}[2] Open backup file`
                   )
                 ),
                 // Option 3: Open Side-by-Side Diff in Editor
@@ -927,6 +960,7 @@ function createTuiRenderer() {
                   el(
                     "text",
                     {
+                      wrapMode: "none",
                       fg: () =>
                         actionChoice() === 2
                           ? theme().text.action.primary.focused
@@ -935,7 +969,7 @@ function createTuiRenderer() {
                         actionChoice() === 2 ? TextAttributes.BOLD : undefined
                     },
                     () =>
-                      `${actionChoice() === 2 ? "› " : "  "}[3] Open diff in editor (backup vs current)`
+                      `${actionChoice() === 2 ? "▸ " : "  "}[3] Open diff in editor (backup vs current)`
                   )
                 )
               )
@@ -944,76 +978,261 @@ function createTuiRenderer() {
         })
       ),
 
-      // 4. Main Split View (Left: Two-line Snapshot List with Parent Folder, Right: Full Paths + Colored Diff)
+      // 3. Main Split View: Two Side-by-Side Bordered Cards
       el(
         "box",
         {
           flexDirection: "row",
+          gap: 2,
           flexGrow: 1,
-          minHeight: 0
+          minHeight: 0,
+          width: "100%"
         },
-        // Left Pane: Snapshot List (44% width, matching session-search & local-memory)
+        // Left Card: Snapshot List (44% width)
         el(
-          "scrollbox",
+          "box",
           {
-            id: "auto-backup-list",
-            ref: (r: unknown) => {
-              listScrollRef = r;
-            },
             width: "44%",
             height: "100%",
+            flexDirection: "column",
             flexShrink: 0,
-            border: ["right"],
+            backgroundColor: () =>
+              theme().background.raised?.base ?? theme().background.base,
+            border: true,
             borderColor: () =>
-              focusPane() === "list" ? theme().text.base : theme().border.base,
-            scrollbarOptions: { visible: false },
+              focusPane() === "list"
+                ? theme().text.action.primary.base
+                : theme().border.base,
+            paddingLeft: 1,
+            paddingRight: 1,
+            paddingTop: 0,
+            paddingBottom: 0,
             onMouseDown: () => setFocusPane("list")
           },
-          createComponent(Show, {
-            get when() {
-              return filtered().length > 0;
+          el(
+            "box",
+            {
+              flexDirection: "row",
+              justifyContent: "space-between",
+              border: ["bottom"],
+              borderColor: () => theme().border.base,
+              paddingX: 1,
+              flexShrink: 0
             },
-            get fallback() {
-              return el(
-                "box",
-                { paddingX: 2, paddingY: 1 },
-                el(
+            el(
+              "text",
+              {
+                fg: () => theme().text.action.primary.base,
+                attributes: TextAttributes.BOLD
+              },
+              "◈ BACKUP SNAPSHOTS"
+            ),
+            el(
+              "text",
+              { fg: () => theme().text.muted },
+              () => `tool:${toolFilter()} · date:${dateFilter()}`
+            )
+          ),
+          el(
+            "scrollbox",
+            {
+              id: "auto-backup-list",
+              ref: (r: unknown) => {
+                listScrollRef = r;
+              },
+              width: "100%",
+              flexGrow: 1,
+              minHeight: 0,
+              scrollbarOptions: { visible: false }
+            },
+            createComponent(Show, {
+              get when() {
+                return filtered().length > 0;
+              },
+              get fallback() {
+                return el(
+                  "box",
+                  { paddingX: 1, paddingY: 1 },
+                  el(
+                    "text",
+                    { fg: () => theme().text.muted },
+                    "No matching backup snapshots found."
+                  )
+                );
+              },
+              get children() {
+                return createComponent(For, {
+                  get each() {
+                    return filtered();
+                  },
+                  children: (item: BackupEntry, idx: () => number) => {
+                    const isSel = () => idx() === selectedIndex();
+                    return el(
+                      "box",
+                      {
+                        id: () => `backup-row-${idx()}`,
+                        flexDirection: "column",
+                        paddingX: 1,
+                        paddingY: 0,
+                        marginBottom: 1,
+                        flexShrink: 0,
+                        backgroundColor: () =>
+                          isSel()
+                            ? theme().background.action.primary.focused
+                            : undefined,
+                        onMouseUp: () => {
+                          setSelectedIndex(idx());
+                          setActionChoice(0);
+                          setActionPopupOpen(true);
+                        },
+                        onMouseOver: () => {
+                          setSelectedIndex(idx());
+                        }
+                      },
+                      // Line 1: Backed-up file relative path + [tool] badge + age
+                      el(
+                        "box",
+                        {
+                          flexDirection: "row",
+                          justifyContent: "space-between",
+                          width: "100%"
+                        },
+                        el(
+                          "text",
+                          {
+                            wrapMode: "none",
+                            truncate: true,
+                            flexShrink: 1,
+                            minWidth: 0,
+                            fg: () =>
+                              isSel()
+                                ? theme().text.action.primary.focused
+                                : theme().text.base,
+                            attributes: () =>
+                              isSel() ? TextAttributes.BOLD : undefined
+                          },
+                          () => `${isSel() ? "▸ " : "  "}${item.relativePath}`
+                        ),
+                        el(
+                          "text",
+                          {
+                            wrapMode: "none",
+                            flexShrink: 0,
+                            fg: () =>
+                              isSel()
+                                ? theme().text.action.primary.focused
+                                : theme().text.action.primary.base
+                          },
+                          () =>
+                            ` [${item.tool || "auto"}] ${formatAge(item.timeMs)}`
+                        )
+                      ),
+                      // Line 2: Parent backup folder directly underneath
+                      el(
+                        "text",
+                        {
+                          wrapMode: "none",
+                          truncate: true,
+                          fg: () =>
+                            isSel()
+                              ? theme().text.action.primary.focused
+                              : theme().text.muted
+                        },
+                        () => `  ↳ ${formatParentBackupPath(item)}`
+                      )
+                    );
+                  }
+                });
+              }
+            })
+          )
+        ),
+
+        // Right Card: Full Paths + Unified Diff Preview (56% width)
+        el(
+          "box",
+          {
+            flexGrow: 1,
+            height: "100%",
+            minWidth: 0,
+            minHeight: 0,
+            flexDirection: "column",
+            backgroundColor: () =>
+              theme().background.raised?.base ?? theme().background.base,
+            border: true,
+            borderColor: () =>
+              focusPane() === "preview"
+                ? theme().text.action.primary.base
+                : theme().border.base,
+            paddingLeft: 2,
+            paddingRight: 2,
+            paddingTop: 0,
+            paddingBottom: 1,
+            onMouseDown: () => setFocusPane("preview")
+          },
+          el(
+            "box",
+            {
+              flexDirection: "row",
+              justifyContent: "space-between",
+              border: ["bottom"],
+              borderColor: () => theme().border.base,
+              marginBottom: 1,
+              flexShrink: 0
+            },
+            el(
+              "text",
+              {
+                fg: () => theme().text.action.primary.base,
+                attributes: TextAttributes.BOLD
+              },
+              "◈ SNAPSHOT & DIFF PREVIEW"
+            ),
+            el(
+              "text",
+              { fg: () => theme().text.muted },
+              () =>
+                selectedEntry()
+                  ? `${formatBytes(selectedEntry()?.size ?? 0)} · ${formatAge(selectedEntry()?.timeMs ?? 0)}`
+                  : "no selection"
+            )
+          ),
+          el(
+            "scrollbox",
+            {
+              id: "auto-backup-preview",
+              ref: (r: unknown) => {
+                previewScrollRef = r;
+              },
+              flexGrow: 1,
+              minWidth: 0,
+              minHeight: 0,
+              focused: () => focusPane() === "preview"
+            },
+            createComponent(Show, {
+              get when() {
+                return Boolean(selectedEntry() && diffPreview());
+              },
+              get fallback() {
+                return el(
                   "text",
                   { fg: () => theme().text.muted },
-                  "No matching backup snapshots found."
-                )
-              );
-            },
-            get children() {
-              return createComponent(For, {
-                get each() {
-                  return filtered();
-                },
-                children: (item: BackupEntry, idx: () => number) => {
-                  const isSel = () => idx() === selectedIndex();
-                  return el(
+                  "Select a snapshot on the left to inspect its full path and diff."
+                );
+              },
+              get children() {
+                return el(
+                  "box",
+                  { flexDirection: "column", gap: 1 },
+                  // Colored left-border header card
+                  el(
                     "box",
                     {
-                      id: () => `backup-row-${idx()}`,
                       flexDirection: "column",
-                      paddingX: 1,
-                      paddingY: 0,
-                      marginBottom: 1,
-                      flexShrink: 0,
-                      backgroundColor: () =>
-                        isSel()
-                          ? theme().background.action.primary.focused
-                          : undefined,
-                      onMouseUp: () => {
-                        setSelectedIndex(idx());
-                        setActionChoice(0);
-                        setActionPopupOpen(true);
-                      },
-                      onMouseOver: () => {
-                        setSelectedIndex(idx());
-                      }
+                      paddingLeft: 1,
+                      border: ["left"],
+                      borderColor: () => theme().text.action.primary.base
                     },
-                    // Line 1: Backed-up file relative path + [tool] badge + age
                     el(
                       "box",
                       {
@@ -1024,235 +1243,108 @@ function createTuiRenderer() {
                       el(
                         "text",
                         {
-                          wrapMode: "none",
-                          truncate: true,
-                          flexShrink: 1,
-                          minWidth: 0,
-                          fg: () =>
-                            isSel()
-                              ? theme().text.action.primary.focused
-                              : theme().text.base,
-                          attributes: () =>
-                            isSel() ? TextAttributes.BOLD : undefined
+                          fg: () => theme().text.base,
+                          attributes: TextAttributes.BOLD
                         },
-                        () => `${isSel() ? "› " : "  "}${item.relativePath}`
+                        () => selectedEntry()?.relativePath ?? ""
                       ),
                       el(
                         "text",
                         {
-                          wrapMode: "none",
-                          flexShrink: 0,
-                          fg: () =>
-                            isSel()
-                              ? theme().text.action.primary.focused
-                              : theme().text.action.primary.base
+                          fg: () => theme().text.action.primary.base,
+                          attributes: TextAttributes.BOLD
                         },
                         () =>
-                          ` [${item.tool || "auto"}] ${formatAge(item.timeMs)}`
+                          `[${(selectedEntry()?.tool || "auto").toUpperCase()} · ${formatBytes(selectedEntry()?.size ?? 0)} · ${formatAge(selectedEntry()?.timeMs ?? 0)}]`
                       )
                     ),
-                    // Line 2: Parent backup folder directly underneath
                     el(
                       "text",
-                      {
-                        wrapMode: "none",
-                        truncate: true,
-                        fg: () =>
-                          isSel()
-                            ? theme().text.action.primary.focused
-                            : theme().text.muted
-                      },
-                      () => `  ↳ ${formatParentBackupPath(item)}`
+                      { fg: () => theme().text.muted },
+                      () => `Snapshot: ${selectedEntry()?.snapshotId ?? ""}`
+                    ),
+                    el(
+                      "text",
+                      { fg: () => theme().text.base, wrapMode: "word" },
+                      () => `Original: ${selectedEntry()?.originalPath ?? ""}`
+                    ),
+                    el(
+                      "text",
+                      { fg: () => theme().text.muted, wrapMode: "word" },
+                      () => `Backup:   ${selectedEntry()?.backupPath ?? ""}`
                     )
-                  );
-                }
-              });
-            }
-          })
-        ),
+                  ),
 
-        // Right Pane: Full Paths + Unified Diff Preview (56% width)
-        el(
-          "scrollbox",
-          {
-            id: "auto-backup-preview",
-            ref: (r: unknown) => {
-              previewScrollRef = r;
-            },
-            flexGrow: 1,
-            minWidth: 0,
-            minHeight: 0,
-            paddingX: 2,
-            paddingY: 1,
-            focused: () => focusPane() === "preview",
-            onMouseDown: () => setFocusPane("preview")
-          },
-          createComponent(Show, {
-            get when() {
-              return Boolean(selectedEntry() && diffPreview());
-            },
-            get fallback() {
-              return el(
-                "text",
-                { fg: () => theme().text.muted },
-                "Select a snapshot on the left to inspect its full path and diff."
-              );
-            },
-            get children() {
-              return el(
-                "box",
-                { flexDirection: "column", gap: 1 },
-                // Colored left-border header card
-                el(
-                  "box",
-                  {
-                    flexDirection: "column",
-                    paddingLeft: 1,
-                    border: ["left"],
-                    borderColor: () => theme().text.action.primary.base
-                  },
+                  // Diff section header
+                  el(
+                    "text",
+                    {
+                      fg: () => theme().text.action.primary.base,
+                      attributes: TextAttributes.BOLD,
+                      marginTop: 1
+                    },
+                    () => diffPreview()?.summary ?? ""
+                  ),
+
+                  // Colored diff lines inside a subtle left-bordered block
                   el(
                     "box",
                     {
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      width: "100%"
+                      flexDirection: "column",
+                      paddingLeft: 1,
+                      border: ["left"],
+                      borderColor: () => theme().border.base
                     },
-                    el(
-                      "text",
-                      {
-                        fg: () => theme().text.base,
-                        attributes: TextAttributes.BOLD
+                    createComponent(For, {
+                      get each() {
+                        return diffPreview()?.lines ?? [];
                       },
-                      () => selectedEntry()?.relativePath ?? ""
-                    ),
-                    el(
-                      "text",
-                      {
-                        fg: () => theme().text.action.primary.base,
-                        attributes: TextAttributes.BOLD
-                      },
-                      () =>
-                        `[${(selectedEntry()?.tool || "auto").toUpperCase()} · ${formatBytes(selectedEntry()?.size ?? 0)} · ${formatAge(selectedEntry()?.timeMs ?? 0)}]`
-                    )
-                  ),
-                  el(
-                    "text",
-                    { fg: () => theme().text.muted },
-                    () => `Snapshot: ${selectedEntry()?.snapshotId ?? ""}`
-                  ),
-                  el(
-                    "text",
-                    { fg: () => theme().text.base, wrapMode: "word" },
-                    () => `Original: ${selectedEntry()?.originalPath ?? ""}`
-                  ),
-                  el(
-                    "text",
-                    { fg: () => theme().text.muted, wrapMode: "word" },
-                    () => `Backup:   ${selectedEntry()?.backupPath ?? ""}`
-                  )
-                ),
-
-                // Diff section header
-                el(
-                  "text",
-                  {
-                    fg: () => theme().text.action.primary.base,
-                    attributes: TextAttributes.BOLD,
-                    marginTop: 1
-                  },
-                  () => diffPreview()?.summary ?? ""
-                ),
-
-                // Colored diff lines inside a subtle left-bordered block
-                el(
-                  "box",
-                  {
-                    flexDirection: "column",
-                    paddingLeft: 1,
-                    border: ["left"],
-                    borderColor: () => theme().border.base
-                  },
-                  createComponent(For, {
-                    get each() {
-                      return diffPreview()?.lines ?? [];
-                    },
-                    children: (line: { type: string; text: string }) =>
-                      el(
-                        "text",
-                        {
-                          fg: () =>
-                            line.type === "add"
-                              ? theme().text.feedback?.success?.base ??
-                                theme().text.action.primary.base
-                              : line.type === "del"
-                                ? theme().text.feedback?.error?.base ??
-                                  "#f87171"
-                                : line.text.startsWith("@@")
-                                  ? theme().text.action.primary.base
-                                  : theme().text.muted,
-                          attributes: () =>
-                            line.type === "add" || line.type === "del"
-                              ? TextAttributes.BOLD
-                              : undefined,
-                          wrapMode: "none",
-                          truncate: true
-                        },
-                        createComponent(For, {
-                          get each() {
-                            return splitHighlightedText(line.text, query());
-                          },
-                          children: (seg: { text: string; match: boolean }) =>
-                            el(
-                              "span",
-                              {
-                                fg: () =>
-                                  seg.match
+                      children: (line: { type: string; text: string }) =>
+                        el(
+                          "text",
+                          {
+                            fg: () =>
+                              line.type === "add"
+                                ? theme().text.feedback?.success?.base ??
+                                  theme().text.action.primary.base
+                                : line.type === "del"
+                                  ? theme().text.feedback?.error?.base ??
+                                    "#f87171"
+                                  : line.text.startsWith("@@")
                                     ? theme().text.action.primary.base
-                                    : undefined,
-                                attributes: () =>
-                                  seg.match ? TextAttributes.BOLD : undefined
-                              },
-                              seg.text
-                            )
-                        })
-                      )
-                  })
-                )
-              );
-            }
-          })
-        )
-      ),
-
-      // 5. Footer Shortcut Bar
-      el(
-        "box",
-        {
-          flexDirection: "row",
-          justifyContent: "space-between",
-          gap: 2,
-          paddingX: 2,
-          paddingY: 1,
-          flexShrink: 0,
-          border: ["top"],
-          borderColor: () => theme().border.base
-        },
-        el(
-          "text",
-          {
-            fg: () => theme().text.muted,
-            flexShrink: 1,
-            minWidth: 0,
-            wrapMode: "none",
-            truncate: true
-          },
-          "enter actions (restore / open) · ↑/↓ or ^j/^k move · ^t tool · ^g date · ^r retention · ^d prune · tab pane"
-        ),
-        el(
-          "text",
-          { fg: () => theme().text.muted, flexShrink: 0, wrapMode: "none" },
-          "0 tokens"
+                                    : theme().text.muted,
+                            attributes: () =>
+                              line.type === "add" || line.type === "del"
+                                ? TextAttributes.BOLD
+                                : undefined,
+                            wrapMode: "none",
+                            truncate: true
+                          },
+                          createComponent(For, {
+                            get each() {
+                              return splitHighlightedText(line.text, query());
+                            },
+                            children: (seg: { text: string; match: boolean }) =>
+                              el(
+                                "span",
+                                {
+                                  fg: () =>
+                                    seg.match
+                                      ? theme().text.action.primary.base
+                                      : undefined,
+                                  attributes: () =>
+                                    seg.match ? TextAttributes.BOLD : undefined
+                                },
+                                seg.text
+                              )
+                          })
+                        )
+                    })
+                  )
+                );
+              }
+            })
+          )
         )
       )
     );
@@ -1388,45 +1480,6 @@ export default {
                 palette: true,
                 slash: {
                   name: "backups",
-                  arguments: true
-                },
-                run: (input) => {
-                  void openBackupsPopup(input);
-                }
-              },
-              {
-                id: "auto.backup.browse.alias.backup",
-                title: "Browse & restore file backups (/backup)",
-                category: "Backup",
-                palette: false,
-                slash: {
-                  name: "backup",
-                  arguments: true
-                },
-                run: (input) => {
-                  void openBackupsPopup(input);
-                }
-              },
-              {
-                id: "auto.backup.browse.alias.restore",
-                title: "Browse & restore file backups (/restore)",
-                category: "Backup",
-                palette: false,
-                slash: {
-                  name: "restore",
-                  arguments: true
-                },
-                run: (input) => {
-                  void openBackupsPopup(input);
-                }
-              },
-              {
-                id: "auto.backup.browse.alias.snapshots",
-                title: "Browse & restore file backups (/snapshots)",
-                category: "Backup",
-                palette: false,
-                slash: {
-                  name: "snapshots",
                   arguments: true
                 },
                 run: (input) => {
